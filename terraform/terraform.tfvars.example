@@ -1,0 +1,10 @@
+project_id = "your-gcp-project-id"
+region = "asia-northeast1"
+
+# API Keys - Replace with your actual keys
+notion_api_key = "your-notion-api-key"
+notion_database_id = "your-notion-database-id"
+openai_api_key = "your-openai-api-key"
+
+# Schedule (cron format - default: every 6 hours)
+schedule = "0 */6 * * *"

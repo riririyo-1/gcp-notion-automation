@@ -742,3 +742,22 @@ gsutil -m rm -r gs://${PROJECT_ID}-terraform-state
 ```
 
 ---
+
+## 設定管理ガイド
+
+### 各設定項目の配置場所
+
+| **設定項目**                     | **配置場所**       | **用途**           | **必須レベル** |
+| -------------------------------- | ------------------ | ------------------ | -------------- |
+| **非機密情報**                   |                    |                    |                |
+| `PROJECT_ID`                     | terraform.tfvars   | Terraform デプロイ | ✅             |
+| `GCP_PROJECT_ID`                 | GitHub Secrets     | CI/CD              | ✅             |
+| **機密情報（API Keys）**         |                    |                    |                |
+| `NOTION_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
+| `NOTION_DATABASE_ID_ARTICLE`     | GCP Secret Manager | Cloud Run 実行時   | ✅             |
+| `OPENAI_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
+| **CI/CD 認証情報**               |                    |                    |                |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | GitHub Secrets     | CI/CD 認証         | ✅             |
+| `GCP_SERVICE_ACCOUNT`            | GitHub Secrets     | CI/CD 認証         | ✅             |
+
+---
