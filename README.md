@@ -131,6 +131,27 @@ gcp-notion-automation/
 
 ---
 
+## GitHub Secrets 管理
+
+Secrets として登録する必要のある項目。
+
+| Secret 名                        | 説明                                                |
+| -------------------------------- | --------------------------------------------------- |
+| `GCP_PROJECT_ID`                 | GCP プロジェクト ID                                 |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Provider の完全な識別子           |
+| `GCP_SERVICE_ACCOUNT`            | GitHub Actions 用サービスアカウントのメールアドレス |
+| `NOTION_API_KEY`                 | Notion API キー                                     |
+| `NOTION_DATABASE_ID`             | Notion Database ID                                  |
+| `OPENAI_API_KEY`                 | OpenAI API キー                                     |
+
+下記のように `Settings > Secrets and variables > Actions` から Secrets を登録する。
+
+<img src='./images/[image]20251127_082357.png' alt='image' style='width: 600px; border: 1px solid black;'>
+
+▲ 登録画面イメージ
+
+---
+
 ## Setup & Usage
 
 ### 事前準備
@@ -713,11 +734,70 @@ jobs:
 
 ### デプロイフロー
 
-1. `main`ブランチに Push
+#### アプリケーションデプロイ (`deploy.yml`)
+
+1. `main`ブランチに Push (src/ 配下の変更)
 2. GitHub Actions が Docker イメージをビルド
 3. Artifact Registry にプッシュ
 4. Cloud Run Jobs を更新
 5. Cloud Scheduler が定期実行
+
+#### インフラ変更 (`terraform.yml`)
+
+1. `terraform/` 配下のファイルを変更
+2. PR 作成時に `terraform plan` が自動実行
+3. PR にプラン内容がコメントされる
+4. `main` にマージすると `terraform apply` が自動実行
+5. GCP インフラが更新される
+
+---
+
+## Terraform CI/CD のセットアップ
+
+### 1. GCP 権限設定
+
+既存のサービスアカウントに Terraform 実行権限を付与する。
+
+```bash
+# プロジェクトIDを設定
+export PROJECT_ID="your-gcp-project-id"
+
+# 権限設定スクリプトを実行
+./setup-terraform-permissions.sh
+```
+
+### 2. GitHub Secrets の追加設定
+
+Terraform 用に以下の Secrets を追加する。
+
+```bash
+# GitHub CLI でログイン
+gh auth login
+
+# Terraform 用 Secrets を設定
+gh secret set NOTION_API_KEY -b `your_notion_api_key_here`
+gh secret set NOTION_DATABASE_ID -b `your_notion_database_id_here`
+gh secret set OPENAI_API_KEY -b `your_openai_api_key_here`
+
+# 設定確認
+gh secret list
+```
+
+### 3. 動作確認
+
+```bash
+# terraform/ 配下のファイルを変更
+cd terraform
+# 例: スケジュールを変更
+vim variables.tf
+
+# Git にコミット & プッシュ
+git add .
+git commit -m "Update Cloud Scheduler schedule"
+git push origin main
+
+# GitHub Actions で自動的に terraform apply が実行される
+```
 
 ---
 
