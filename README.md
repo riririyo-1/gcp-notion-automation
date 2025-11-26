@@ -762,8 +762,33 @@ jobs:
 # プロジェクトIDを設定
 export PROJECT_ID="your-gcp-project-id"
 
-# 権限設定スクリプトを実行
-./setup-terraform-permissions.sh
+# サービスアカウントのメールアドレス
+SA_EMAIL="github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Cloud Scheduler 管理権限
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/cloudscheduler.admin"
+
+# Secret Manager 管理権限
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/secretmanager.admin"
+
+# Service Account 管理権限
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/iam.serviceAccountAdmin"
+
+# IAM Policy 管理権限
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/resourcemanager.projectIamAdmin"
+
+# Storage 管理権限 (Terraform State用)
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.admin"
 ```
 
 ### 2. GitHub Secrets の追加設定

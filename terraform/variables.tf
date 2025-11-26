@@ -30,5 +30,5 @@ variable "openai_api_key" {
 variable "schedule" {
   description = "Cloud Scheduler cron schedule"
   type        = string
-  default     = "0 5,10,13,24 * * *"  # 5時、10時、13時、24時
+  default     = "0 6,10,13,24 * * *"  # 6時、10時、13時、24時
 }
