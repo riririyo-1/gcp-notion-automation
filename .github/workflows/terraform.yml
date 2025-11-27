@@ -46,7 +46,6 @@ jobs:
       - name: Terraform Format Check
         working-directory: terraform
         run: terraform fmt -check
-        continue-on-error: true
 
       - name: Terraform Init
         working-directory: terraform
@@ -95,7 +94,27 @@ jobs:
               body: output
             });
 
-      - name: Terraform Apply
+      - name: Terraform Apply - APIs First
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: terraform
+        run: |
+          # First, enable APIs
+          terraform apply -auto-approve \
+            -target="google_project_service.iam" \
+            -target="google_project_service.secretmanager" \
+            -target="google_project_service.artifactregistry" \
+            -target="google_project_service.run" \
+            -target="google_project_service.cloudscheduler" \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="notion_api_key=${{ secrets.NOTION_API_KEY }}" \
+            -var="notion_database_id=${{ secrets.NOTION_DATABASE_ID }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}"
+
+      - name: Wait for APIs to propagate
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: sleep 30
+
+      - name: Terraform Apply - All Resources
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         working-directory: terraform
         run: |
