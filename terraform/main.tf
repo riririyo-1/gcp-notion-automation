@@ -1,9 +1,37 @@
+# -- Enable Required APIs --------------
+resource "google_project_service" "iam" {
+  service = "iam.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "secretmanager" {
+  service = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "artifactregistry" {
+  service = "artifactregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "run" {
+  service = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudscheduler" {
+  service = "cloudscheduler.googleapis.com"
+  disable_on_destroy = false
+}
+
 # -- Artifact Registry Repository --------------
 resource "google_artifact_registry_repository" "notion_automation" {
   location      = var.region
   repository_id = "notion-automation"
   description   = "Docker repository for Notion automation"
   format        = "DOCKER"
+  
+  depends_on = [google_project_service.artifactregistry]
 }
 
 # -- Secret Manager: API Keys --------------
@@ -13,6 +41,8 @@ resource "google_secret_manager_secret" "notion_api_key" {
   replication {
     auto {}
   }
+  
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "notion_api_key" {
@@ -26,6 +56,8 @@ resource "google_secret_manager_secret" "notion_database_id" {
   replication {
     auto {}
   }
+  
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "notion_database_id" {
@@ -39,6 +71,8 @@ resource "google_secret_manager_secret" "openai_api_key" {
   replication {
     auto {}
   }
+  
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "openai_api_key" {
@@ -50,6 +84,8 @@ resource "google_secret_manager_secret_version" "openai_api_key" {
 resource "google_service_account" "cloudrun_sa" {
   account_id   = "notion-automation-cloudrun"
   display_name = "Service Account for Notion Automation Cloud Run"
+  
+  depends_on = [google_project_service.iam]
 }
 
 # Secret Manager へのアクセス権限
@@ -126,6 +162,8 @@ resource "google_cloud_run_v2_job" "notion_automation" {
       timeout     = "600s"
     }
   }
+  
+  depends_on = [google_project_service.run]
 }
 
 # -- Cloud Scheduler --------------
@@ -145,6 +183,8 @@ resource "google_cloud_scheduler_job" "notion_automation_trigger" {
       service_account_email = google_service_account.cloudrun_sa.email
     }
   }
+  
+  depends_on = [google_project_service.cloudscheduler]
 }
 
 # Cloud Run Job の実行権限をサービスアカウントに付与
