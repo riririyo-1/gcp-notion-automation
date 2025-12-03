@@ -142,7 +142,7 @@ resource "google_cloud_run_v2_job" "notion_automation" {
         }
 
         env {
-          name = "NOTION_DATABASE_ID_ARTICLE"
+          name = "NOTION_DATABASE_ID"
           value_source {
             secret_key_ref {
               secret  = google_secret_manager_secret.notion_database_id.secret_id

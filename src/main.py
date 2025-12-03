@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 # Notion APIの設定 ------------------------------------------------------------------------------
 load_dotenv()
 Notion_API_Key = os.environ["NOTION_API_KEY"]
-Notion_Database_ID = os.environ["NOTION_DATABASE_ID_ARTICLE"]
+Notion_Database_ID = os.environ["NOTION_DATABASE_ID"]
 url = f"https://api.notion.com/v1/databases/{Notion_Database_ID}/query"
 openai_api_key = os.environ["OPENAI_API_KEY"]
 openai.api_key = openai_api_key

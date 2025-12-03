@@ -170,7 +170,7 @@ PROJECT_ID=your_gcp_project_id_here
 
 # Notion API設定
 NOTION_API_KEY=your_notion_api_key_here
-NOTION_DATABASE_ID_ARTICLE=your_notion_database_id_here
+NOTION_DATABASE_ID=your_notion_database_id_here
 
 # OpenAI API設定
 OPENAI_API_KEY=your_openai_api_key_here
@@ -488,7 +488,7 @@ resource "google_cloud_run_v2_job" "notion_automation" {
         }
 
         env {
-          name = "NOTION_DATABASE_ID_ARTICLE"
+          name = "NOTION_DATABASE_ID"
           value_source {
             secret_key_ref {
               secret  = google_secret_manager_secret.notion_database_id.secret_id
@@ -859,7 +859,7 @@ gsutil -m rm -r gs://${PROJECT_ID}-terraform-state
 | `GCP_PROJECT_ID`                 | GitHub Secrets     | CI/CD              | ✅             |
 | **機密情報（API Keys）**         |                    |                    |                |
 | `NOTION_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
-| `NOTION_DATABASE_ID_ARTICLE`     | GCP Secret Manager | Cloud Run 実行時   | ✅             |
+| `NOTION_DATABASE_ID`             | GCP Secret Manager | Cloud Run 実行時   | ✅             |
 | `OPENAI_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
 | **CI/CD 認証情報**               |                    |                    |                |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | GitHub Secrets     | CI/CD 認証         | ✅             |
