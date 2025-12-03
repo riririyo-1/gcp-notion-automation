@@ -1,4 +1,9 @@
 # -- Enable Required APIs --------------
+resource "google_project_service" "cloudresourcemanager" {
+  service            = "cloudresourcemanager.googleapis.com"
+  disable_on_destroy = false
+}
+
 resource "google_project_service" "iam" {
   service            = "iam.googleapis.com"
   disable_on_destroy = false
@@ -93,18 +98,24 @@ resource "google_secret_manager_secret_iam_member" "notion_api_key_access" {
   secret_id = google_secret_manager_secret.notion_api_key.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.iam]
 }
 
 resource "google_secret_manager_secret_iam_member" "notion_database_id_access" {
   secret_id = google_secret_manager_secret.notion_database_id.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.iam]
 }
 
 resource "google_secret_manager_secret_iam_member" "openai_api_key_access" {
   secret_id = google_secret_manager_secret.openai_api_key.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.iam]
 }
 
 # -- Cloud Run Job --------------
@@ -192,4 +203,6 @@ resource "google_project_iam_member" "cloudrun_invoker" {
   project = var.project_id
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.cloudresourcemanager]
 }
