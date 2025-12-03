@@ -1,16 +1,19 @@
-name: Terraform CI/CD
+name: Infrastructure CI/CD
 
 on:
   pull_request:
+    # terraformコードの変更時に実行
     paths:
       - "terraform/**"
-      - ".github/workflows/terraform.yml"
+      - ".github/workflows/deploy-infra.yml"
   push:
+    # mainブランチへのプッシュ時に実行
     branches:
       - main
+    # terraformコードの変更時
     paths:
       - "terraform/**"
-      - ".github/workflows/terraform.yml"
+      - ".github/workflows/deploy-infra.yml"
 
 env:
   TF_VERSION: 1.5.0
@@ -57,6 +60,8 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform
+        # プルリク時のみPlanを実行して結果をファイル保存
+        if: github.event_name == 'pull_request'
         run: |
           terraform plan -no-color \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
@@ -64,6 +69,9 @@ jobs:
             -var="notion_database_id=${{ secrets.NOTION_DATABASE_ID }}" \
             -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
             -out=tfplan.out
+
+            # planファイルバイナリからテキストへ変換して保存 (コメント投稿用)
+          terraform show -no-color tfplan.out > tfplan.txt
         continue-on-error: false
         id: plan
 
@@ -95,6 +103,7 @@ jobs:
             });
 
       - name: Terraform Apply
+        # mainブランチへのプッシュ時にのみApplyを実行
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         working-directory: terraform
         run: |

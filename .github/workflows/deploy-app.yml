@@ -1,9 +1,15 @@
-name: Deploy to Cloud Run
+name: Application Build & Deploy
 
 on:
   push:
+    # mainブランチへのプッシュ時に実行
     branches:
       - main
+    # アプリケーションコードの変更時のみ実行するよう制限
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy-app.yml"
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
