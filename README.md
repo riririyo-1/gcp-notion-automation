@@ -109,6 +109,38 @@ graph TB
 
 ---
 
+## CI/CD フロー
+
+```mermaid
+graph TB
+    A[Push to main] --> B[変更検出]
+
+    B --> C{変更内容}
+
+    C -->|terraform/ のみ| D[Infraデプロイ]
+    C -->|app/ のみ| E[Appデプロイ]
+    C -->|両方| F[Infraデプロイ]
+
+    F --> G[Appデプロイ]
+
+    D --> H[完了]
+    E --> H
+    G --> H
+
+    style A fill:#e1f5ff
+    style B fill:#fff3e0
+    style C fill:#fff3e0
+    style D fill:#c8e6c9
+    style E fill:#c8e6c9
+    style F fill:#c8e6c9
+    style G fill:#c8e6c9
+    style H fill:#f3e5f5
+```
+
+※ app のみ更新した場合に、infra の更新を待機し続けないように注意。
+
+---
+
 ## folder structure
 
 ```text
