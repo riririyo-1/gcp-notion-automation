@@ -315,7 +315,7 @@ def generate_summary_Tags(each_article):
     # Question1（翻訳）
     prompt_1 = PromptTemplate(
         input_variables=["article_text"],
-        template="次の文章を記事本文と同言語で200字以内で要約して。語尾は断定形で: {article_text}",
+        template="次の文章を200字程度で要約して。言語は記事本文と同じで。語尾は断定形で: {article_text}",
     )
     chain_1 = LLMChain(llm=llm, prompt=prompt_1, output_key="article_summary")
 
