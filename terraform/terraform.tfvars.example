@@ -6,6 +6,3 @@ region = "asia-northeast1"
 notion_api_key = "your-notion-api-key"
 notion_database_id = "your-notion-database-id"
 openai_api_key = "your-openai-api-key"
-
-# Cloud Scheduler 設定
-schedule = "0 */6 * * *"

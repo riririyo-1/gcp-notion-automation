@@ -152,7 +152,7 @@ Secrets として登録する必要のある項目。
 
 ---
 
-## Setup & Usage
+## 構築手順
 
 ### 事前準備
 
@@ -213,14 +213,8 @@ gcloud auth application-default login
 # プロジェクトIDを設定
 export PROJECT_ID="your-gcp-project-id"
 gcloud config set project $PROJECT_ID
-# 必要なAPIを有効化
-gcloud services enable cloudrun.googleapis.com
-gcloud services enable run.googleapis.com
-gcloud services enable cloudscheduler.googleapis.com
-gcloud services enable secretmanager.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
-gcloud services enable iamcredentials.googleapis.com
-gcloud services enable sts.googleapis.com
+
+# 注: 必要なAPIはTerraformが自動的に有効化します
 ```
 
 ### Workload Identity (OIDC) の設定
@@ -385,19 +379,52 @@ variable "openai_api_key" {
 variable "schedule" {
   description = "Cloud Scheduler cron schedule"
   type        = string
-  default     = "0 */6 * * *"  # 6時間ごと
+  default     = "0 6,10,13,23 * * *"  # 6時、10時、13時、23時に実行
 }
 ```
 
 **`terraform/main.tf`**
 
 ```hcl
+# -- Enable Required APIs --------------
+resource "google_project_service" "cloudresourcemanager" {
+  service            = "cloudresourcemanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "iam" {
+  service            = "iam.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "secretmanager" {
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "artifactregistry" {
+  service            = "artifactregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "run" {
+  service            = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudscheduler" {
+  service            = "cloudscheduler.googleapis.com"
+  disable_on_destroy = false
+}
+
 # -- Artifact Registry Repository --------------
 resource "google_artifact_registry_repository" "notion_automation" {
   location      = var.region
   repository_id = "notion-automation"
   description   = "Docker repository for Notion automation"
   format        = "DOCKER"
+
+  depends_on = [google_project_service.artifactregistry]
 }
 
 # -- Secret Manager: API Keys --------------
@@ -407,6 +434,8 @@ resource "google_secret_manager_secret" "notion_api_key" {
   replication {
     auto {}
   }
+
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "notion_api_key" {
@@ -444,6 +473,8 @@ resource "google_secret_manager_secret_version" "openai_api_key" {
 resource "google_service_account" "cloudrun_sa" {
   account_id   = "notion-automation-cloudrun"
   display_name = "Service Account for Notion Automation Cloud Run"
+
+  depends_on = [google_project_service.iam]
 }
 
 # Secret Manager へのアクセス権限
@@ -451,6 +482,8 @@ resource "google_secret_manager_secret_iam_member" "notion_api_key_access" {
   secret_id = google_secret_manager_secret.notion_api_key.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.iam]
 }
 
 resource "google_secret_manager_secret_iam_member" "notion_database_id_access" {
@@ -467,8 +500,9 @@ resource "google_secret_manager_secret_iam_member" "openai_api_key_access" {
 
 # -- Cloud Run Job --------------
 resource "google_cloud_run_v2_job" "notion_automation" {
-  name     = "notion-automation-job"
-  location = var.region
+  name                = "notion-automation-job"
+  location            = var.region
+  deletion_protection = false
 
   template {
     template {
@@ -519,6 +553,8 @@ resource "google_cloud_run_v2_job" "notion_automation" {
       timeout     = "600s"
     }
   }
+
+  depends_on = [google_project_service.run]
 }
 
 # -- Cloud Scheduler --------------
@@ -538,6 +574,8 @@ resource "google_cloud_scheduler_job" "notion_automation_trigger" {
       service_account_email = google_service_account.cloudrun_sa.email
     }
   }
+
+  depends_on = [google_project_service.cloudscheduler]
 }
 
 # Cloud Run Job の実行権限をサービスアカウントに付与
@@ -545,6 +583,8 @@ resource "google_project_iam_member" "cloudrun_invoker" {
   project = var.project_id
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+
+  depends_on = [google_project_service.cloudresourcemanager]
 }
 ```
 
@@ -579,7 +619,7 @@ region              = "asia-northeast1"
 notion_api_key      = "secret_xxxxxxxxxxxxx"
 notion_database_id  = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 openai_api_key      = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-schedule            = "0 */6 * * *"  # 6時間ごと実行
+schedule            = "0 6,10,13,23 * * *"  # 6時、10時、13時、23時に実行
 EOF
 
 # .gitignore に追加(機密情報を含むため)
@@ -677,21 +717,147 @@ gh secret set GCP_SERVICE_ACCOUNT -b"github-actions-sa@your-gcp-project-id.iam.g
 `.github/workflows/deploy.yml` を作成:
 
 ```yaml
-name: Deploy to Cloud Run
+name: Deploy Infrastructure & Application
 
+# -- トリガー設定 --------------------------------------------
 on:
   push:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - "terraform/**"
+      - ".github/workflows/deploy.yml"
 
+# -- 環境変数設定 --------------------------------------------
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-northeast1
   REPOSITORY: notion-automation
   IMAGE_NAME: notion-automation
 
+# -- JOB設定 -------------------------------------------------
 jobs:
-  deploy:
+  # 変更検出JOB
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra-changed: ${{ steps.changes.outputs.terraform }}
+      app-changed: ${{ steps.changes.outputs.app }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
+            app:
+              - 'src/**'
+              - 'Dockerfile'
+
+  # infraデプロイJOB
+  deploy-infra:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: |
+          terraform plan \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="notion_api_key=${{ secrets.NOTION_API_KEY }}" \
+            -var="notion_database_id=${{ secrets.NOTION_DATABASE_ID }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
+            -out=tfplan.out
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan.out
+
+  # appデプロイJOB（appのみ更新）
+  deploy-app-only:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.app-changed == 'true' &&
+      needs.detect-changes.outputs.infra-changed == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                       -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
+                       ./src
+
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy to Cloud Run Job
+        run: |
+          gcloud run jobs update notion-automation-job \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
+            --region=${{ env.REGION }}
+
+  # appデプロイJOB（infra更新後）
+  deploy-app-after-infra:
+    needs: [detect-changes, deploy-infra]
+    if: |
+      needs.detect-changes.outputs.app-changed == 'true' &&
+      needs.detect-changes.outputs.infra-changed == 'true' &&
+      needs.deploy-infra.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -734,21 +900,15 @@ jobs:
 
 ### デプロイフロー
 
-#### アプリケーションデプロイ (`deploy.yml`)
+ワークフローは変更検出機能を持ち、効率的にデプロイを実行します。
 
-1. `main`ブランチに Push (src/ 配下の変更)
-2. GitHub Actions が Docker イメージをビルド
-3. Artifact Registry にプッシュ
-4. Cloud Run Jobs を更新
-5. Cloud Scheduler が定期実行
+#### 変更検出と自動デプロイ
 
-#### インフラ変更 (`terraform.yml`)
-
-1. `terraform/` 配下のファイルを変更
-2. PR 作成時に `terraform plan` が自動実行
-3. PR にプラン内容がコメントされる
-4. `main` にマージすると `terraform apply` が自動実行
-5. GCP インフラが更新される
+1. **変更検出**: `terraform/` または `src/` の変更を自動検出
+2. **インフラデプロイ**: `terraform/` が変更された場合、`terraform apply` を実行
+3. **アプリデプロイ**: `src/` が変更された場合、Docker ビルド → Artifact Registry → Cloud Run Jobs 更新
+4. **順次実行**: インフラとアプリ両方が変更された場合、インフラ → アプリの順で実行
+5. **定期実行**: Cloud Scheduler が毎日 6 時、10 時、13 時、23 時に自動実行
 
 ---
 
@@ -845,24 +1005,5 @@ gcloud iam workload-identity-pools delete github-pool \
 # State管理用バケットの削除
 gsutil -m rm -r gs://${PROJECT_ID}-terraform-state
 ```
-
----
-
-## 設定管理ガイド
-
-### 各設定項目の配置場所
-
-| **設定項目**                     | **配置場所**       | **用途**           | **必須レベル** |
-| -------------------------------- | ------------------ | ------------------ | -------------- |
-| **非機密情報**                   |                    |                    |                |
-| `PROJECT_ID`                     | terraform.tfvars   | Terraform デプロイ | ✅             |
-| `GCP_PROJECT_ID`                 | GitHub Secrets     | CI/CD              | ✅             |
-| **機密情報（API Keys）**         |                    |                    |                |
-| `NOTION_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
-| `NOTION_DATABASE_ID`             | GCP Secret Manager | Cloud Run 実行時   | ✅             |
-| `OPENAI_API_KEY`                 | GCP Secret Manager | Cloud Run 実行時   | ✅             |
-| **CI/CD 認証情報**               |                    |                    |                |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | GitHub Secrets     | CI/CD 認証         | ✅             |
-| `GCP_SERVICE_ACCOUNT`            | GitHub Secrets     | CI/CD 認証         | ✅             |
 
 ---
