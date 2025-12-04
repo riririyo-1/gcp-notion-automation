@@ -329,6 +329,8 @@ def generate_summary_Tags(each_article):
             {article_summary}. 
             登場する企業、業界、分類を表すような2～20 個の単語を、最小単位で、カンマ区切りで。
             半導体関連の記事は「半導体」というタグを必ず含めて。
+            製品名、サービス名、企業名などの固有名詞も含めて。日本企業は日本語、外国企業はアルファベットで。
+            例: "AI, 半導体, テクノロジー, 自動運転, ソニー, NVIDIA, Aplle, iPhone"
             """,
     )
     chain_2 = LLMChain(llm=llm, prompt=prompt_2, output_key="article_tags")
